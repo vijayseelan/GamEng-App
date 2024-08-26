@@ -1241,6 +1241,46 @@ body {
     color: white;
 }
 
+#lesson-map {
+    background-image: url('map-background.jpg');
+        background-size: cover;
+        background-position: center;
+    }
+
+    #lesson-map .absolute {
+    transition: all 0.3s ease;
+}
+
+#lesson-map .absolute:hover {
+    z-index: 20;
+}
+
+@keyframes pulsate {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+  }
+  
+  70% {
+    transform: scale(1.10);
+    box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+  }
+  
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+}
+
+.lesson-node {
+  animation: pulsate 2s infinite;
+}
+
+.lesson-node:hover {
+  animation: none;
+  transform: scale(1.1);
+}
+
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -1930,18 +1970,19 @@ window.showLessons = async function() {
 
         const lessonsSection = document.createElement('div');
         lessonsSection.id = 'lessons-section';
-        lessonsSection.className = 'space-y-8';
+        lessonsSection.className = 'space-y-4';
         mainContent.appendChild(lessonsSection);
 
         const title = document.createElement('h3');
-        title.className = 'text-2xl font-semibold text-center text-indigo-600 mb-6';
-        title.textContent = 'Available Lessons';
+        title.className = 'text-2xl font-semibold text-center text-indigo-600 mb-2';
+        title.textContent = 'Learning Adventure Map';
         lessonsSection.appendChild(title);
 
-        const lessonsList = document.createElement('div');
-        lessonsList.id = 'lessons-list';
-        lessonsList.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
-        lessonsSection.appendChild(lessonsList);
+        const lessonMap = document.createElement('div');
+        lessonMap.id = 'lesson-map';
+        lessonMap.className = 'relative w-full h-[80vh] bg-cover bg-center rounded-lg shadow-lg overflow-hidden';
+        lessonMap.style.backgroundImage = "url('map-background.jpg');";
+        lessonsSection.appendChild(lessonMap);
 
         if (snapshot.exists()) {
             const user = auth.currentUser;
@@ -1955,31 +1996,59 @@ window.showLessons = async function() {
                 }
             }
 
+            let lessonCount = 0;
             snapshot.forEach((childSnapshot) => {
                 const lessonData = childSnapshot.val();
                 const lessonId = childSnapshot.key;
                 
-                if (lessonData && typeof lessonData === 'object') {
+                if (lessonData && typeof lessonData === 'object' && lessonData.title) {
                     const lessonProgress = userProgress[lessonId] ? userProgress[lessonId].overallProgress || 0 : 0;
                     
-                    const lessonCard = document.createElement('div');
-                    lessonCard.className = 'neumorphic p-6 rounded-lg shadow-lg transition-all duration-300 hover:shadow-xl';
-                    lessonCard.dataset.lessonId = lessonId;
-                    lessonCard.innerHTML = `
-                        <h3 class="text-xl font-semibold mb-3 text-indigo-600">${lessonData.title || 'Untitled Lesson'}</h3>
-                        <p class="text-gray-600 mb-4">${lessonData.task || 'No task specified.'}</p>
-                        <div class="progress-bar mb-4">
-                            <div class="progress" style="width: ${lessonProgress}%"></div>
-                        </div>
-                        <button onclick="viewLesson('${lessonId}')" class="neumorphic-button w-full px-4 py-2 text-indigo-600 font-semibold hover:bg-indigo-100 transition-colors duration-300">View Lesson</button>
+                    const lessonNode = document.createElement('div');
+                    lessonNode.className = 'lesson-node absolute w-12 h-12 rounded-full bg-indigo-500 flex items-center justify-center cursor-pointer transition-all duration-300 shadow-lg';
+                    lessonNode.style.left = `${Math.random() * 80 + 10}%`;
+                    lessonNode.style.top = `${Math.random() * 80 + 10}%`;
+                    lessonNode.innerHTML = `
+                        <span class="text-xl text-white font-bold">${lessonCount + 1}</span>
                     `;
-                    lessonsList.appendChild(lessonCard);
+                    if (lessonProgress >= 100) {
+                        lessonNode.classList.add('ring-4', 'ring-green-400', 'ring-opacity-50');
+                    }
+                    
+                    // Create hover tooltip
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'absolute hidden bg-white p-3 rounded-lg shadow-xl z-10 w-48 -translate-x-1/2 -translate-y-full mb-2';
+                    tooltip.innerHTML = `
+                        <h4 class="font-semibold text-indigo-600">${lessonData.title}</h4>
+                        <p class="text-sm mt-1">${lessonData.task || 'No task specified'}</p>
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                            <div class="bg-green-500 h-2 rounded-full" style="width: ${lessonProgress}%"></div>
+                        </div>
+                    `;
+                    lessonNode.appendChild(tooltip);
+
+                    lessonNode.onmouseenter = () => {
+                        tooltip.classList.remove('hidden');
+                        lessonNode.style.animation = 'none';
+                    };
+                    lessonNode.onmouseleave = () => {
+                        tooltip.classList.add('hidden');
+                        lessonNode.style.animation = 'pulsate 2s infinite';
+                    };
+                    lessonNode.onclick = () => viewLesson(lessonId);
+                    
+                    lessonMap.appendChild(lessonNode);
+                    lessonCount++;
                 } else {
-                    console.warn(`Invalid lesson data for lesson ID: ${lessonId}`);
+                    console.warn(`Invalid lesson data for lesson ID: ${lessonId}`, lessonData);
                 }
             });
+
+            if (lessonCount === 0) {
+                lessonMap.innerHTML = '<p class="text-center text-gray-500 mt-8">No valid lessons available yet. Check back soon!</p>';
+            }
         } else {
-            lessonsList.innerHTML = '<p class="text-center text-gray-500">No lessons available yet. Check back soon!</p>';
+            lessonMap.innerHTML = '<p class="text-center text-gray-500 mt-8">No lessons available yet. Check back soon!</p>';
         }
 
         document.getElementById('lessons-section').classList.remove('hidden');
