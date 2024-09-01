@@ -1306,6 +1306,38 @@ body {
     background-color: #c53030; /* Darker red on hover */
 }
 
+.neumorphic {
+    transition: all 0.3s ease;
+}
+
+.neumorphic:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+#leaderboard-list > div:nth-child(1),
+#team-leaderboard-list > div:nth-child(1) {
+    background: linear-gradient(135deg, #fef9c3, #fde68a);
+    border-left: 5px solid #f59e0b;
+}
+
+#leaderboard-list > div:nth-child(2),
+#team-leaderboard-list > div:nth-child(2) {
+    background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+    border-left: 5px solid #9ca3af;
+}
+
+#leaderboard-list > div:nth-child(3),
+#team-leaderboard-list > div:nth-child(3) {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    border-left: 5px solid #b91c1c;
+}
+
+.neumorphic .text-3xl,
+.neumorphic .text-2xl {
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -2803,19 +2835,34 @@ function loadLeaderboard() {
 
             leaderboardData.forEach((entry, index) => {
                 const listItem = document.createElement('div');
-                listItem.className = 'neumorphic p-4 mb-4';
+                listItem.className = 'neumorphic p-4 mb-4 flex items-center justify-between transition-all duration-300 hover:transform hover:scale-105';
                 listItem.innerHTML = `
-                    <span class="font-bold">#${index + 1}</span>
-                    <span class="ml-4">${entry.name}</span>
-                    <span class="float-right">${entry.points} points</span>
-                    <div class="mt-2">
-                        ${entry.badges ? entry.badges.map(badge => `<span class="inline-block bg-blue-200 rounded-full px-3 py-1 text-sm font-semibold text-blue-700 mr-2 mb-2">${badge}</span>`).join('') : ''}
+                    <div class="flex items-center">
+                        <div class="text-2xl font-bold ${getPositionColor(index + 1)} mr-4">#${index + 1}</div>
+                        <div>
+                            <div class="font-semibold text-lg">${entry.name}</div>
+                            <div class="text-sm text-gray-600">${entry.points} points</div>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap justify-end">
+                        ${entry.badges ? entry.badges.map(badge => `
+                            <span class="inline-block bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full mr-1 mb-1">${badge}</span>
+                        `).join('') : ''}
                     </div>
                 `;
                 leaderboardList.appendChild(listItem);
             });
         });
     });
+}
+
+function getPositionColor(position) {
+    switch(position) {
+        case 1: return 'text-yellow-500';
+        case 2: return 'text-gray-400';
+        case 3: return 'text-yellow-600';
+        default: return 'text-gray-700';
+    }
 }
 // Show points award (for teachers)
 // ... existing code ...
@@ -2825,7 +2872,8 @@ window.showPointsAward = function() {
     const mainContent = document.getElementById('main-content');
     mainContent.innerHTML = `
         <h2 class="text-2xl font-bold mb-4">Award Points and Badges</h2>
-        <select id="student-list" class="neumorphic-inset w-full p-2 mb-4"></select>
+        <select id="student-list" class="neumorphic-inset w-full p-2 mb-4" onchange="loadStudentBadges()"></select>
+        <div id="student-badges" class="mb-4"></div>
         <div class="grid grid-cols-2 gap-4 mb-4">
             <button onclick="awardPoints(10)" class="neumorphic-button">+10 points</button>
             <button onclick="awardPoints(-10)" class="neumorphic-button">-10 points</button>
@@ -2890,6 +2938,44 @@ window.showPointsAward = function() {
     `;
     loadStudentList();
 }
+
+// Load student badges
+let currentStudentRef = null;
+
+window.loadStudentBadges = function() {
+    const studentId = document.getElementById('student-list').value;
+    if (!studentId) {
+        document.getElementById('student-badges').innerHTML = '';
+        return;
+    }
+
+    if (currentStudentRef) {
+        off(currentStudentRef); // Remove previous listener
+    }
+
+    currentStudentRef = ref(db, `users/${studentId}`);
+    onValue(currentStudentRef, (snapshot) => {
+        const studentData = snapshot.val();
+        const badges = studentData.badges || [];
+
+        const badgesHtml = badges.map(badge => `
+            <div class="badge-card neumorphic p-2 mb-2">
+                <span class="emoji">${getBadgeEmoji(badge)}</span>
+                <span class="badge-name">${badge}</span>
+            </div>
+        `).join('');
+
+        document.getElementById('student-badges').innerHTML = `
+            <h3 class="text-xl font-bold mb-2">Awarded Badges</h3>
+            <div class="grid grid-cols-2 gap-2">${badgesHtml}</div>
+        `;
+    }, (error) => {
+        console.error('Failed to load student badges:', error);
+    });
+}
+
+
+
 
 // Update the showTeamManagement function
 window.showTeamManagement = function() {
@@ -4400,7 +4486,7 @@ async function populateTeamSelect() {
     }
 }
 
-function updateTeamLeaderboard(teamsData) {
+async function updateTeamLeaderboard(teamsData) {
     const leaderboardList = document.getElementById('team-leaderboard-list');
     if (!leaderboardList) return;
 
@@ -4409,24 +4495,53 @@ function updateTeamLeaderboard(teamsData) {
     const sortedTeams = Object.entries(teamsData)
         .sort(([, a], [, b]) => (b.points || 0) - (a.points || 0));
 
-    sortedTeams.forEach(([teamName, teamData], index) => {
+    for (let i = 0; i < sortedTeams.length; i++) {
+        const [teamName, teamData] = sortedTeams[i];
+        const position = i + 1; // Calculate the correct position
+
         const listItem = document.createElement('div');
-        listItem.className = 'neumorphic p-4 flex items-center justify-between';
+        listItem.className = 'neumorphic p-4 mb-4 flex flex-col transition-all duration-300 hover:transform hover:scale-105';
+        
+        const memberNames = await getTeamMemberNames(teamData.members);
+        
         listItem.innerHTML = `
-            <div class="flex items-center">
-                <span class="text-2xl font-bold mr-4">#${index + 1}</span>
-                <div>
-                    <h3 class="text-xl font-semibold">${teamName}</h3>
-                    <p class="text-gray-600">${teamData.members ? teamData.members.length : 0} members</p>
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center">
+                    <div class="text-3xl font-bold ${getPositionColor(position)} mr-4">
+                        #${position}
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-semibold">${teamName}</h3>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="text-3xl font-bold text-indigo-600">${teamData.points || 0}</span>
+                    <p class="text-sm text-gray-600">points</p>
                 </div>
             </div>
-            <div class="text-right">
-                <span class="text-3xl font-bold text-indigo-600">${teamData.points || 0}</span>
-                <p class="text-gray-600">points</p>
+            <div class="mt-2">
+                <p class="text-sm text-gray-600 font-semibold">Team Members:</p>
+                <div class="flex flex-wrap mt-1">
+                    ${memberNames.map(name => `
+                        <span class="inline-block bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded-full mr-1 mb-1">${name}</span>
+                    `).join('')}
+                </div>
             </div>
         `;
         leaderboardList.appendChild(listItem);
-    });
+    }
+}
+async function getTeamMemberNames(memberIds) {
+    if (!memberIds || memberIds.length === 0) return ['No members'];
+    
+    const memberNames = await Promise.all(memberIds.map(async (memberId) => {
+        const memberRef = ref(db, `users/${memberId}`);
+        const memberSnapshot = await get(memberRef);
+        const memberData = memberSnapshot.val();
+        return memberData ? memberData.fullName : 'Unknown Member';
+    }));
+    
+    return memberNames;
 }
 
 function initRelatednessMode() {
@@ -4440,9 +4555,9 @@ function initRelatednessMode() {
 
 function setupTeamPointsListener(schoolCode) {
     const teamsRef = ref(db, `schools/${schoolCode}/teams`);
-    onValue(teamsRef, (snapshot) => {
+    onValue(teamsRef, async (snapshot) => {
         if (snapshot.exists()) {
-            updateTeamLeaderboard(snapshot.val());
+            await updateTeamLeaderboard(snapshot.val());
         }
     });
 }
