@@ -2942,20 +2942,27 @@ window.showPointsAward = function() {
 // Load student badges
 let currentStudentRef = null;
 
-window.loadStudentBadges = function() {
+window.loadStudentBadges = async function() {
     const studentId = document.getElementById('student-list').value;
+    const studentBadgesDiv = document.getElementById('student-badges');
+    
+    // Clear previous badges
+    studentBadgesDiv.innerHTML = '';
+
     if (!studentId) {
-        document.getElementById('student-badges').innerHTML = '';
         return;
     }
 
-    if (currentStudentRef) {
-        off(currentStudentRef); // Remove previous listener
-    }
+    try {
+        const studentRef = ref(db, `users/${studentId}`);
+        const studentSnapshot = await get(studentRef);
+        const studentData = studentSnapshot.val();
 
-    currentStudentRef = ref(db, `users/${studentId}`);
-    onValue(currentStudentRef, (snapshot) => {
-        const studentData = snapshot.val();
+        if (!studentData) {
+            studentBadgesDiv.innerHTML = '<p class="text-red-500">No student data found</p>';
+            return;
+        }
+
         const badges = studentData.badges || [];
 
         const badgesHtml = badges.map(badge => `
@@ -2965,13 +2972,14 @@ window.loadStudentBadges = function() {
             </div>
         `).join('');
 
-        document.getElementById('student-badges').innerHTML = `
-            <h3 class="text-xl font-bold mb-2">Awarded Badges</h3>
+        studentBadgesDiv.innerHTML = `
+            <h3 class="text-xl font-bold mb-2">Awarded Badges for ${studentData.fullName}</h3>
             <div class="grid grid-cols-2 gap-2">${badgesHtml}</div>
         `;
-    }, (error) => {
+    } catch (error) {
         console.error('Failed to load student badges:', error);
-    });
+        studentBadgesDiv.innerHTML = '<p class="text-red-500">Error loading badges</p>';
+    }
 }
 
 
@@ -3187,6 +3195,9 @@ window.awardBadge = async function(badgeName) {
             await update(leaderboardRef, { badges: badges });
 
             alert(`Badge "${badgeName}" awarded to ${studentData.fullName}`);
+            
+            // Refresh the badges display
+            loadStudentBadges();
         } else {
             alert(`${studentData.fullName} already has the "${badgeName}" badge.`);
         }
